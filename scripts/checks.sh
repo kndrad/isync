@@ -1,6 +1,6 @@
 #!/bin/bash
 
 
-black ./..
+ruff format ./..
 ruff check --fix
 bandit -r *.py
