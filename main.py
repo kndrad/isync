@@ -1,6 +1,8 @@
 from pyicloud import PyiCloudService
 import yaml
 import os
+import datetime
+from typing import List
 
 
 def rm_tilde(path) -> str:
@@ -32,6 +34,30 @@ def read_config(path: str) -> Config:
     return config
 
 
+class PasswordFile:
+    def __init__(self, name: str, date_modified: datetime.datetime):
+        self.name = name
+        self.date_modified = date_modified
+
+    def __str__(self) -> str:
+        return f"{self.name}    {self.date_modified.strftime("%H:%M %d-%m-%Y")}"
+
+    def __lt__(self, other) -> bool:
+        return self.date_modified < other.date_modified
+
+
+def icloud_password_files(path: str) -> List[PasswordFile]:
+    files: List[PasswordFile] = []
+
+    for filename in api.drive[path].dir():
+        name = api.drive[path][filename].name
+        date_modified = api.drive[path][filename].date_modified
+        files.append(PasswordFile(name=name, date_modified=date_modified))
+
+    # Sort files by their modification dates
+    return sorted(files, reverse=True)
+
+
 if __name__ == "__main__":
     # Credentials can be read from the keyring as well.
     #
@@ -61,34 +87,15 @@ if __name__ == "__main__":
         )
         exit(1)
 
-    # TODO: Move these lines of code to execute after sync with icloud passwords dir.
-    # if not config.local_passwords_dir:
-    #     # Specify the path to the password directory.
-    #     passwords_dir = input("enter path to the passwords directory:")
-    #     passwords_dir = rm_tilde(passwords_dir)
-    #     print("input:", passwords_dir)
-
-    #     if not os.path.isdir(passwords_dir):
-    #         print(f"Error: the directory '{passwords_dir}' does not exist.")
-    #         exit(1)
-
-    icloud_passwords_dir = config.icloud_passwords_dir
-    if not icloud_passwords_dir:
+    # Get icloud drive passwords directory path from config
+    path = config.icloud_passwords_dir
+    if not path:
         print("Error: iCloud Drive passwords directory path required.")
-
-    # Access the drive and read the files within the icloud passwords directory.
-    try:
-        files = api.drive[icloud_passwords_dir].dir()
-    except Exception as e:
-        print(f"Error: Could not find icloud passwords directory: {e}.")
         exit(1)
 
-    print("Authentication status:", api.authenticate())
-    print("Requires 2FA:", api.requires_2fa)
-    print("Is trusted session:", api.is_trusted_session)
+    icloud_password_files = icloud_password_files(path)
 
-    # Sort files by their modification dates and check the youngest one and get the title of it.
-    for filename in files:
-        print(api.drive[icloud_passwords_dir][filename].name)
+    for file in icloud_password_files:
+        print(file)
 
     print("Program completed succesfully.")
