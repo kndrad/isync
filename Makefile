@@ -1,8 +1,8 @@
 checks:
 	./scripts/checks.sh
 
-bandit-root-py:
-	bandir -r *.py
+formats:
+	./scripts/format.sh
 
 run:
 	python main.py

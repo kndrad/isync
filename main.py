@@ -47,6 +47,10 @@ class PasswordFile:
 
 
 def icloud_password_files(path: str) -> List[PasswordFile]:
+    if not path:
+        print("Error: iCloud Drive passwords directory path required.")
+        raise Exception  # TODO
+
     files: List[PasswordFile] = []
 
     for filename in api.drive[path].dir():
@@ -88,14 +92,19 @@ if __name__ == "__main__":
         exit(1)
 
     # Get icloud drive passwords directory path from config
+    # then read all files from that directory.
     path = config.icloud_passwords_dir
     if not path:
         print("Error: iCloud Drive passwords directory path required.")
         exit(1)
 
-    icloud_password_files = icloud_password_files(path)
+    try:
+        icloud_password_files = icloud_password_files(config.icloud_passwords_dir)
+    except Exception as e:
+        print(e)
+        exit(1)
 
-    for file in icloud_password_files:
-        print(file)
+    # Now get local password files directory by it's path read from config.
+    
 
     print("Program completed succesfully.")
