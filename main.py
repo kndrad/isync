@@ -47,7 +47,7 @@ class PasswordFile:
         return self.date_modified < other.date_modified
 
 
-def icloud_password_files(path: str) -> List[PasswordFile]:
+def icloud_passwords(path: str) -> List[PasswordFile]:
     if not path:
         print("Error: iCloud Drive passwords directory path required.")
         raise Exception  # TODO
@@ -62,7 +62,7 @@ def icloud_password_files(path: str) -> List[PasswordFile]:
     return sorted(password_files, reverse=True)
 
 
-def local_password_files(path: str) -> List[PasswordFile]:
+def local_passwords(path: str) -> List[PasswordFile]:
     local_passwords_path = config.local_passwords_dir
     if not local_passwords_path:
         print("Error: Local passwords directory path required.")
@@ -115,21 +115,20 @@ if __name__ == "__main__":
     # Get icloud drive passwords directory path from config
     # then read all files from that directory.
     try:
-        icloud_password_files = icloud_password_files(config.icloud_passwords_dir)
+        icloud_passwords = icloud_passwords(config.icloud_passwords_dir)
     except Exception as e:
         print(e)
         exit(1)
 
     # Now get local password files directory by it's path read from config.
     try:
-        local_password_files: List[PasswordFile] = local_password_files(
+        local_passwords: List[PasswordFile] = local_passwords(
             config.local_passwords_dir
         )
     except Exception as e:
         print(e)
         exit(1)
 
-    for pwsd_f in sorted(local_password_files):
-        print(pwsd_f)
+    # TODO: Compare local password files with that from the icloud drive.
 
     print("Program completed succesfully.")
