@@ -2,5 +2,6 @@
 
 
 ruff format ./..
-ruff check --fix
+ruff check --fix ./..
+
 bandit -r *.py
