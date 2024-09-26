@@ -1,8 +1,9 @@
 from pyicloud import PyiCloudService
 import yaml
 import os
-import datetime
+from datetime import datetime
 from typing import List
+from os.path import join
 
 
 def rm_tilde(path) -> str:
@@ -14,19 +15,19 @@ def rm_tilde(path) -> str:
 class Config:
     def __init__(self, path: str):
         with open(path, "r") as f:
-            cfg = yaml.safe_load(f)
+            config = yaml.safe_load(f)
 
-            self.apple_id = cfg["login"]["username"]
-            self.password = cfg["login"]["password"]
+            self.apple_id = config["login"]["username"]
+            self.password = config["login"]["password"]
 
-            passwords_dir = cfg["paths"]["passwords_dir"]
-            passwords_dir = rm_tilde(passwords_dir)
+            local_passwords_dir = config["paths"]["local_passwords_dir"]
+            local_passwords_dir = rm_tilde(local_passwords_dir)
 
-            if not os.path.isdir(passwords_dir):
-                print(f"Error: the directory '{passwords_dir}' does not exist.")
+            if not os.path.isdir(local_passwords_dir):
+                print(f"Error: the directory '{local_passwords_dir}' does not exist.")
 
-            self.local_passwords_dir = passwords_dir
-            self.icloud_passwords_dir = cfg["paths"]["icloud_passwords_dir"]
+            self.local_passwords_dir = local_passwords_dir
+            self.icloud_passwords_dir = config["paths"]["icloud_passwords_dir"]
 
 
 def read_config(path: str) -> Config:
@@ -35,7 +36,7 @@ def read_config(path: str) -> Config:
 
 
 class PasswordFile:
-    def __init__(self, name: str, date_modified: datetime.datetime):
+    def __init__(self, name: str, date_modified: datetime):
         self.name = name
         self.date_modified = date_modified
 
@@ -51,15 +52,35 @@ def icloud_password_files(path: str) -> List[PasswordFile]:
         print("Error: iCloud Drive passwords directory path required.")
         raise Exception  # TODO
 
-    files: List[PasswordFile] = []
+    password_files: List[PasswordFile] = []
 
     for filename in api.drive[path].dir():
         name = api.drive[path][filename].name
         date_modified = api.drive[path][filename].date_modified
-        files.append(PasswordFile(name=name, date_modified=date_modified))
+        password_files.append(PasswordFile(name=name, date_modified=date_modified))
 
-    # Sort files by their modification dates
-    return sorted(files, reverse=True)
+    return sorted(password_files, reverse=True)
+
+
+def local_password_files(path: str) -> List[PasswordFile]:
+    local_passwords_path = config.local_passwords_dir
+    if not local_passwords_path:
+        print("Error: Local passwords directory path required.")
+        exit(1)
+
+    local_password_files: List[PasswordFile] = []
+
+    for root, dirs, files in os.walk(local_passwords_path):
+        for name in files:
+            stat_result = os.stat(join(root, name))
+
+            # Convert into normal datetime object.
+            date_modified = datetime.fromtimestamp(stat_result.st_mtime)
+            local_password_files.append(
+                PasswordFile(name=name, date_modified=date_modified)
+            )
+
+    return sorted(local_password_files)
 
 
 if __name__ == "__main__":
@@ -93,11 +114,6 @@ if __name__ == "__main__":
 
     # Get icloud drive passwords directory path from config
     # then read all files from that directory.
-    path = config.icloud_passwords_dir
-    if not path:
-        print("Error: iCloud Drive passwords directory path required.")
-        exit(1)
-
     try:
         icloud_password_files = icloud_password_files(config.icloud_passwords_dir)
     except Exception as e:
@@ -105,6 +121,15 @@ if __name__ == "__main__":
         exit(1)
 
     # Now get local password files directory by it's path read from config.
-    
+    try:
+        local_password_files: List[PasswordFile] = local_password_files(
+            config.local_passwords_dir
+        )
+    except Exception as e:
+        print(e)
+        exit(1)
+
+    for pwsd_f in sorted(local_password_files):
+        print(pwsd_f)
 
     print("Program completed succesfully.")
