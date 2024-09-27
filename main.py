@@ -1,9 +1,12 @@
 from pyicloud import PyiCloudService
 import yaml
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List
 from os.path import join
+
+
+DATETIME_FORMAT = "%H:%M %d-%m-%Y"
 
 
 def rm_tilde(path) -> str:
@@ -36,18 +39,18 @@ def read_config(path: str) -> Config:
 
 
 class PasswordFile:
-    def __init__(self, name: str, date_modified: datetime):
+    def __init__(self, name: str, last_modified: datetime):
         self.name = name
-        self.date_modified = date_modified
+        self.last_modified = last_modified
 
     def __str__(self) -> str:
-        return f"{self.name}    {self.date_modified.strftime("%H:%M %d-%m-%Y")}"
+        return f"{self.name}    {self.last_modified.strftime(DATETIME_FORMAT)}"
 
     def __lt__(self, other) -> bool:
-        return self.date_modified < other.date_modified
+        return self.last_modified < other.last_modified
 
 
-def icloud_passwords(path: str) -> List[PasswordFile]:
+def icloud_password_files(path: str) -> List[PasswordFile]:
     if not path:
         print("Error: iCloud Drive passwords directory path required.")
         raise Exception  # TODO
@@ -55,20 +58,20 @@ def icloud_passwords(path: str) -> List[PasswordFile]:
     password_files: List[PasswordFile] = []
 
     for filename in api.drive[path].dir():
-        name = api.drive[path][filename].name
+        filename = api.drive[path][filename].name
         date_modified = api.drive[path][filename].date_modified
-        password_files.append(PasswordFile(name=name, date_modified=date_modified))
+        password_files.append(PasswordFile(name=filename, last_modified=date_modified))
 
     return sorted(password_files, reverse=True)
 
 
-def local_passwords(path: str) -> List[PasswordFile]:
+def local_password_files(path: str) -> List[PasswordFile]:
     local_passwords_path = config.local_passwords_dir
     if not local_passwords_path:
         print("Error: Local passwords directory path required.")
         exit(1)
 
-    local_password_files: List[PasswordFile] = []
+    password_files: List[PasswordFile] = []
 
     for root, dirs, files in os.walk(local_passwords_path):
         for name in files:
@@ -76,11 +79,9 @@ def local_passwords(path: str) -> List[PasswordFile]:
 
             # Convert into normal datetime object.
             date_modified = datetime.fromtimestamp(stat_result.st_mtime)
-            local_password_files.append(
-                PasswordFile(name=name, date_modified=date_modified)
-            )
+            password_files.append(PasswordFile(name=name, last_modified=date_modified))
 
-    return sorted(local_password_files)
+    return sorted(password_files, reverse=True)
 
 
 if __name__ == "__main__":
@@ -115,20 +116,40 @@ if __name__ == "__main__":
     # Get icloud drive passwords directory path from config
     # then read all files from that directory.
     try:
-        icloud_passwords = icloud_passwords(config.icloud_passwords_dir)
+        icloud_password_files = icloud_password_files(config.icloud_passwords_dir)
     except Exception as e:
         print(e)
         exit(1)
 
-    # Now get local password files directory by it's path read from config.
+    # Read local passwords directory.
     try:
-        local_passwords: List[PasswordFile] = local_passwords(
+        local_password_files: List[PasswordFile] = local_password_files(
             config.local_passwords_dir
         )
     except Exception as e:
         print(e)
         exit(1)
 
-    # TODO: Compare local password files with that from the icloud drive.
+    # Compare local password files with that from the icloud drive.
+    local_newest_password_file = local_password_files[0]
+    print("Newest local passwords file:", local_newest_password_file)
+
+    icloud_newest_password_file = icloud_password_files[0]
+    print("Newest icloud passwords drive:", icloud_newest_password_file)
+
+    local_password_date = local_newest_password_file.last_modified.date()
+    icloud_password_date = icloud_newest_password_file.last_modified.date()
+
+    # Check if local needs to be synchronized with the iCloud drive
+    if local_password_date > icloud_password_date:
+        print("Local password file is newer. Synchronization needed.")
+        # TODO: Synchronization logic
+    elif local_password_date < icloud_password_date:
+        print("iCloud password file is newer. Synchronization needed.")
+        # TODO: Synchronization logic
+    else:
+        print(
+            "No need for synchronization between local password files and iCloud password files."
+        )
 
     print("Program completed succesfully.")
