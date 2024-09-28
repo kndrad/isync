@@ -1,10 +1,10 @@
 from pyicloud import PyiCloudService
 import yaml
 import os
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import List
 from os.path import join
-
+import io
 
 DATETIME_FORMAT = "%H:%M %d-%m-%Y"
 
@@ -50,7 +50,7 @@ class PasswordFile:
         return self.last_modified < other.last_modified
 
 
-def icloud_password_files(path: str) -> List[PasswordFile]:
+def icloud_passsword_files(path: str) -> List[PasswordFile]:
     if not path:
         print("Error: iCloud Drive passwords directory path required.")
         raise Exception  # TODO
@@ -59,8 +59,8 @@ def icloud_password_files(path: str) -> List[PasswordFile]:
 
     for filename in api.drive[path].dir():
         filename = api.drive[path][filename].name
-        date_modified = api.drive[path][filename].date_modified
-        password_files.append(PasswordFile(name=filename, last_modified=date_modified))
+        last_modified = api.drive[path][filename].date_modified
+        password_files.append(PasswordFile(name=filename, last_modified=last_modified))
 
     return sorted(password_files, reverse=True)
 
@@ -78,10 +78,10 @@ def local_password_files(path: str) -> List[PasswordFile]:
             stat_result = os.stat(join(root, name))
 
             # Convert into normal datetime object.
-            date_modified = datetime.fromtimestamp(stat_result.st_mtime)
-            password_files.append(PasswordFile(name=name, last_modified=date_modified))
+            last_modified = datetime.fromtimestamp(stat_result.st_mtime)
+            password_files.append(PasswordFile(name=name, last_modified=last_modified))
 
-    return sorted(password_files, reverse=True)
+    return sorted(password_files, key=lambda f: f.last_modified, reverse=True)
 
 
 if __name__ == "__main__":
@@ -116,7 +116,7 @@ if __name__ == "__main__":
     # Get icloud drive passwords directory path from config
     # then read all files from that directory.
     try:
-        icloud_password_files = icloud_password_files(config.icloud_passwords_dir)
+        icloud_passsword_files = icloud_passsword_files(config.icloud_passwords_dir)
     except Exception as e:
         print(e)
         exit(1)
@@ -131,21 +131,47 @@ if __name__ == "__main__":
         exit(1)
 
     # Compare local password files with that from the icloud drive.
-    local_newest_password_file = local_password_files[0]
-    print("Newest local passwords file:", local_newest_password_file)
+    local_newest_pswd_file = local_password_files[0]
+    print("Newest local passwords file:", local_newest_pswd_file)
 
-    icloud_newest_password_file = icloud_password_files[0]
-    print("Newest icloud passwords drive:", icloud_newest_password_file)
+    icloud_newest_pswd_file = icloud_passsword_files[0]
+    print("Newest icloud passwords drive:", icloud_newest_pswd_file)
 
-    local_password_date = local_newest_password_file.last_modified.date()
-    icloud_password_date = icloud_newest_password_file.last_modified.date()
+    local_pswd_date = local_newest_pswd_file.last_modified.date()
+    icloud_pswd_date = icloud_newest_pswd_file.last_modified.date()
+
+    # For testing purposes, to see if it's capable of listing dir contents:
+    try:
+        print(
+            "Contents of iCloud passwords directory:",
+            api.drive[config.icloud_passwords_dir].dir(),
+        )
+    except Exception as e:
+        print("Error listing iCloud directory:", e)
 
     # Check if local needs to be synchronized with the iCloud drive
-    if local_password_date > icloud_password_date:
-        print("Local password file is newer. Synchronization needed.")
-        # TODO: Synchronization logic
-    elif local_password_date < icloud_password_date:
-        print("iCloud password file is newer. Synchronization needed.")
+    if local_pswd_date > icloud_pswd_date:
+        print(
+            f"Local password file {local_newest_pswd_file.name} is newer than the icloud one - syncing..."
+        )
+        local_pswd_file_path = join(
+            config.local_passwords_dir, local_newest_pswd_file.name
+        )
+        with open(local_pswd_file_path, "rb") as file_in:
+            # FIX for KeyError: "clientid"
+            api._drive.params["clientId"] = api.client_id
+
+            try:
+                api.drive[config.icloud_passwords_dir][
+                    local_newest_pswd_file.name
+                ].upload(file_in)
+                print(f"File {local_newest_pswd_file.name} uploaded.")
+            except Exception as e:
+                print(f"Error uploading file: {e}")
+    elif local_pswd_date < icloud_pswd_date:
+        print(
+            f"iCloud password file {icloud_newest_pswd_file.name} is newer than the local one - syncing..."
+        )
         # TODO: Synchronization logic
     else:
         print(
