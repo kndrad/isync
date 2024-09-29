@@ -5,6 +5,8 @@ from datetime import datetime
 from typing import List
 from os.path import join
 
+DATETIME_FORMAT = "%H:%M %d-%m-%Y"
+
 
 def rm_tilde(path) -> str:
     if path.startswith("~"):
@@ -129,6 +131,50 @@ if __name__ == "__main__":
         print(e)
         exit(1)
 
-    # TODO: Compare local password files with that from the icloud drive.
+    # Compare local password files with that from the icloud drive.
+    local_newest_pswd_file = local_passwords[0]
+    print("Newest local passwords file:", local_newest_pswd_file)
+
+    icloud_newest_pswd_file = icloud_passwords[0]
+    print("Newest icloud passwords drive:", icloud_newest_pswd_file)
+
+    local_pswd_date = local_newest_pswd_file.last_modified.date()
+    icloud_pswd_date = icloud_newest_pswd_file.last_modified.date()
+
+    # For testing purposes, to see if it's capable of listing dir contents:
+    try:
+        print(
+            "Contents of iCloud passwords directory:",
+            api.drive[config.icloud_passwords_dir].dir(),
+        )
+    except Exception as e:
+        print("Error listing iCloud directory:", e)
+
+    # Check if local needs to be synchronized with the iCloud drive
+    if local_pswd_date > icloud_pswd_date:
+        print(
+            f"Local password file {local_newest_pswd_file.name} is newer than the icloud one - syncing..."
+        )
+        local_pswd_file_path = join(
+            config.local_passwords_dir, local_newest_pswd_file.name
+        )
+        with open(local_pswd_file_path, "rb") as file_in:
+            # FIX for KeyError: "clientid"
+            api._drive.params["clientId"] = api.client_id
+
+            try:
+                api.drive[config.icloud_passwords_dir].upload(file_in)
+                print(f"File {local_newest_pswd_file.name} uploaded.")
+            except Exception as e:
+                print(f"Error uploading file: {e}")
+    elif local_pswd_date < icloud_pswd_date:
+        print(
+            f"iCloud password file {icloud_newest_pswd_file.name} is newer than the local one - syncing..."
+        )
+        # TODO: Synchronization logic
+    else:
+        print(
+            "No need for synchronization between local password files and iCloud password files."
+        )
 
     print("Program completed succesfully.")
